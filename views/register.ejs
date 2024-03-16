@@ -9,9 +9,10 @@
   <body>
     <div class="main">
       <div class="main-2">
-        <form action="/login" method="post">
-          <h1 class="heade">Login now</h1>
-       
+        <form method="post">
+          <h1 class="heade">Register now</h1>
+          <input class="name" type="text" name="name" placeholder="Name..." />
+          <br />
           <input
             class="email"
             type="email"
@@ -25,11 +26,7 @@
             name="password"
             placeholder="Password..."
           />
-          <br />
-          <p><%= locals.message %></p>
-
-          <button class="btn">Login</button>
- 
+          <button class="btn">Sign Up</button>
         </form>
       </div>
     </div>

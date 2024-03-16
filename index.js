@@ -1,8 +1,11 @@
-import express, { urlencoded } from "express";
+import express from "express";
 import mongoose from "mongoose";
 import path from "path";
 import cookieParser from "cookie-parser";
-import { LOADIPHLPAPI } from "dns";
+import jwt from "jsonwebtoken";
+import bcrypt from "bcrypt"
+
+const app = express();
 
 //  ** Connecting MongoDb **
 mongoose
@@ -11,39 +14,93 @@ mongoose
     console.log("DataBase Connected!!");
   })
   .catch((e) => {
-    console.log(e);
+    console.log("Error is getting in connecting DB", e);
   });
 
-const messageSchema = new mongoose.Schema({
+// ** created Schema **
+const userSchema = new mongoose.Schema({
   name: String,
   email: String,
+  password: String,
 });
-const Message = mongoose.model("Message", messageSchema);
-
-const app = express();
-const users = [];
+const User = mongoose.model("User", userSchema);
 
 // Using MIDDLEWARES
 app.use(express.static(path.join(path.resolve(), "public")));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
-
 app.set("view engine", "ejs");
 
-//  ** Home route **
-app.get("/", (req, res) => {
+//   ** Authentication checker **
+const isAuthenticated = async (req, res, next) => {
   const { token } = req.cookies;
-  console.log("Value of token is:" + token);
-
   if (token) {
-    res.render("logout");
+    const decoded = jwt.verify(token, "jddkvndfosfefkjddj");
+    req.user = await User.findById(decoded._id);
+    next();
   } else {
-    res.render("login");
+    res.redirect("/login");
   }
+};
+
+//  ** Home route **
+app.get("/", isAuthenticated, (req, res) => {
+  res.render("logout", { name: req.user.name });
 });
 
-app.post("/login", (req, res) => {
-  res.cookie("token", "Bonku", {
+// **  Login route  **
+app.get("/login", (req, res) => {
+  res.render("login");
+});
+
+// ** Register route **
+app.get("/register", (req, res) => {
+  res.render("register");
+});
+
+//  *********** POST ROUTES FROM HERE ************
+
+app.post("/login", async (req, res) => {
+  const { email, password } = req.body;
+
+  let user = await User.findOne({ email });
+  if (!user) return res.redirect("/register");
+
+  const isMatch = await bcrypt.compare(password, user.password)
+
+  if (!isMatch) return res.render("login", { message: "Password incorrect 🔑❌" });
+
+  const token = jwt.sign({ _id: user._id }, "jddkvndfosfefkjddj");
+  console.log(token); 
+
+  res.cookie("token", token, {
+    httpOnly: true,
+    expires: new Date(Date.now() + 30 * 1000),
+  });
+  res.redirect("/");
+});
+
+//  ** Register POST route  **
+app.post("/register", async (req, res) => {
+  const { name, email, password } = req.body;
+
+  let user = await User.findOne({ email });
+  if (user) {
+    return res.redirect("/login");
+  }
+
+  let hashedPassword = await bcrypt.hash(password, 16)
+
+  user = await User.create({
+    name,
+    email,
+    password : hashedPassword,
+  });
+
+  const token = jwt.sign({ _id: user._id }, "jddkvndfosfefkjddj");
+  console.log(token);
+
+  res.cookie("token", token, {
     httpOnly: true,
     expires: new Date(Date.now() + 30 * 1000),
   });
@@ -58,42 +115,17 @@ app.get("/logout", (req, res) => {
   res.redirect("/");
 });
 
-//  ** Normal Route **
-app.get("/success", (req, res) => {
-  res.send("Check DB!!");
-});
-
-//  ** Dynamic route **
-app.get("/contact", (req, res) => {
-  res.render("index", { name: "Bonkieo" });
-});
-
 //  ** Pushing data from FORM in MongoDB **
-app.post("/contact", async (req, res) => {
-  const { name, email } = req.body;
-  await Message.create({ name: name, email: email });
+// app.post("/contact", async (req, res) => {
+//   const { name, email } = req.body;
+//   await Message.create({ name: name, email: email });
 
-  res.redirect("/success");
-});
-
-//  ** Sending Chaining Data **
-app.get("/chainingData", (req, res) => {
-  res.status(404).send("Apun ka khudka ERROR");
-});
+//   res.redirect("/success");
+// });
 
 //  ** static folder **
 app.get("/static", (req, res) => {
   res.sendFile("index");
-});
-
-//  ** Dummy data **
-app.get("/data", (req, res) => {
-  res.json({
-    Category: "Electronic ",
-    quantity: 45,
-    products: [],
-    availability: true,
-  });
 });
 
 app.listen(5000, () => {
